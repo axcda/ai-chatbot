@@ -112,11 +112,11 @@ export async function POST(request: Request) {
       const streamId = generateUUID();
 
       const isDash = selectedChatModel.startsWith('dash:');
-      const activeTools = isDash
-        ? ([] as const)
+      const activeToolsGuest: ('getWeather')[] | undefined = isDash
+        ? undefined
         : selectedChatModel === 'chat-model-reasoning'
-          ? ([] as const)
-          : (['getWeather'] as const);
+          ? undefined
+          : ['getWeather'];
 
       const stream = createUIMessageStream({
         execute: ({ writer: dataStream }) => {
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
             system: systemPrompt({ selectedChatModel, requestHints }),
             messages: convertToModelMessages(uiMessages),
             stopWhen: stepCountIs(5),
-            experimental_activeTools: activeTools,
+            experimental_activeTools: activeToolsGuest,
             experimental_transform: smoothStream({ chunking: 'word' }),
             ...(isDash
               ? {}
@@ -233,11 +233,13 @@ export async function POST(request: Request) {
     let finalUsage: LanguageModelUsage | undefined;
 
     const isDash = selectedChatModel.startsWith('dash:');
-    const activeTools = isDash
-      ? ([] as const)
+    const activeTools: (
+      'getWeather' | 'createDocument' | 'updateDocument' | 'requestSuggestions'
+    )[] | undefined = isDash
+      ? undefined
       : selectedChatModel === 'chat-model-reasoning'
-        ? ([] as const)
-        : (['getWeather', 'createDocument', 'updateDocument', 'requestSuggestions'] as const);
+        ? undefined
+        : ['getWeather', 'createDocument', 'updateDocument', 'requestSuggestions'];
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
