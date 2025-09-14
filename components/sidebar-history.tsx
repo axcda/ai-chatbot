@@ -240,7 +240,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
               (() => {
                 const chatsFromHistory = isGuest
                   ? guestChats
-                  : paginatedChatHistories.flatMap(
+                  : (paginatedChatHistories ?? []).flatMap(
                       (paginatedChatHistory) => paginatedChatHistory.chats,
                     );
 
