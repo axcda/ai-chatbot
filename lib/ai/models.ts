@@ -9,13 +9,12 @@ export interface ChatModel {
 export const chatModels: Array<ChatModel> = [
   {
     id: 'chat-model',
-    name: 'Grok Vision',
-    description: 'Advanced multimodal model with vision and text capabilities',
+    name: 'Qwen Plus',
+    description: 'DashScope OpenAI-compatible qwen-plus (text & multimodal)',
   },
   {
     id: 'chat-model-reasoning',
-    name: 'Grok Reasoning',
-    description:
-      'Uses advanced chain-of-thought reasoning for complex problems',
+    name: 'Qwen Plus (Reasoning)',
+    description: 'Same endpoint with reasoning-style responses when enabled',
   },
 ];

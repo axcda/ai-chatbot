@@ -37,12 +37,12 @@ import { ArrowDown } from 'lucide-react';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
-import { chatModels } from '@/lib/ai/models';
+import { chatModels as staticChatModels } from '@/lib/ai/models';
 import { saveChatModelAsCookie } from '@/app/(chat)/actions';
 import { startTransition } from 'react';
 import { getContextWindow, normalizeUsage } from 'tokenlens';
 import { Context } from './elements/context';
-import { myProvider } from '@/lib/ai/providers';
+// Do not import provider on the client; only need a modelId string for UI context
 
 function PureMultimodalInput({
   chatId,
@@ -189,8 +189,9 @@ function PureMultimodalInput({
     }
   };
 
+  // Only need a stable modelId for token usage UI; avoid provider calls on client
   const modelResolver = useMemo(() => {
-    return myProvider.languageModel(selectedModelId);
+    return { modelId: selectedModelId } as const;
   }, [selectedModelId]);
 
   const contextMax = useMemo(() => {
@@ -434,10 +435,24 @@ function PureModelSelectorCompact({
   selectedModelId: string;
 }) {
   const [optimisticModelId, setOptimisticModelId] = useState(selectedModelId);
+  const [dynamicModels, setDynamicModels] = useState<typeof staticChatModels | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/models')
+      .then((r) => r.json())
+      .then((json) => {
+        const models = Array.isArray(json?.models) ? json.models : [];
+        if (mounted && models.length > 0) setDynamicModels(models);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const selectedModel = chatModels.find(
-    (model) => model.id === optimisticModelId,
-  );
+  const chatModels = dynamicModels ?? staticChatModels;
+
+  const selectedModel = chatModels.find((model) => model.id === optimisticModelId);
 
   return (
     <PromptInputModelSelect

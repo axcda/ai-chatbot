@@ -26,7 +26,7 @@ import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
 import { isProductionEnvironment } from '@/lib/constants';
-import { myProvider } from '@/lib/ai/providers';
+import { getLanguageModel, myProvider } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
 import { geolocation } from '@vercel/functions';
@@ -95,6 +95,85 @@ export async function POST(request: Request) {
 
     const userType: UserType = session.user.type;
 
+    // Guest sessions: skip all database reads/writes and rely on client context
+    if (userType === 'guest') {
+      const uiMessages = [...(requestBody.previousMessages ?? []), message];
+
+      const { longitude, latitude, city, country } = geolocation(request);
+
+      const requestHints: RequestHints = {
+        longitude,
+        latitude,
+        city,
+        country,
+      };
+
+      let finalUsage: LanguageModelUsage | undefined;
+      const streamId = generateUUID();
+
+      const isDash = selectedChatModel.startsWith('dash:');
+      const activeTools = isDash
+        ? ([] as const)
+        : selectedChatModel === 'chat-model-reasoning'
+          ? ([] as const)
+          : (['getWeather'] as const);
+
+      const stream = createUIMessageStream({
+        execute: ({ writer: dataStream }) => {
+          const result = streamText({
+            model: getLanguageModel(selectedChatModel),
+            system: systemPrompt({ selectedChatModel, requestHints }),
+            messages: convertToModelMessages(uiMessages),
+            stopWhen: stepCountIs(5),
+            experimental_activeTools: activeTools,
+            experimental_transform: smoothStream({ chunking: 'word' }),
+            ...(isDash
+              ? {}
+              : {
+                  tools: {
+                    getWeather,
+                  },
+                }),
+            experimental_telemetry: {
+              isEnabled: isProductionEnvironment,
+              functionId: 'stream-text',
+            },
+            onFinish: ({ usage }) => {
+              finalUsage = usage;
+              dataStream.write({ type: 'data-usage', data: usage });
+            },
+          });
+
+          result.consumeStream();
+
+          dataStream.merge(
+            result.toUIMessageStream({
+              sendReasoning: true,
+            }),
+          );
+        },
+        generateId: generateUUID,
+        onFinish: async () => {
+          // No persistence for guest in API; client persists locally
+        },
+        onError: () => {
+          return 'Oops, an error occurred!';
+        },
+      });
+
+      const streamContext = getStreamContext();
+
+      if (streamContext) {
+        return new Response(
+          await streamContext.resumableStream(streamId, () =>
+            stream.pipeThrough(new JsonToSseTransformStream()),
+          ),
+        );
+      } else {
+        return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
+      }
+    }
+
     const messageCount = await getMessageCountByUserId({
       id: session.user.id,
       differenceInHours: 24,
@@ -153,32 +232,35 @@ export async function POST(request: Request) {
 
     let finalUsage: LanguageModelUsage | undefined;
 
+    const isDash = selectedChatModel.startsWith('dash:');
+    const activeTools = isDash
+      ? ([] as const)
+      : selectedChatModel === 'chat-model-reasoning'
+        ? ([] as const)
+        : (['getWeather', 'createDocument', 'updateDocument', 'requestSuggestions'] as const);
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
-          model: myProvider.languageModel(selectedChatModel),
+          model: getLanguageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning'
-              ? []
-              : [
-                  'getWeather',
-                  'createDocument',
-                  'updateDocument',
-                  'requestSuggestions',
-                ],
+          experimental_activeTools: activeTools,
           experimental_transform: smoothStream({ chunking: 'word' }),
-          tools: {
-            getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-            }),
-          },
+          ...(isDash
+            ? {}
+            : {
+                tools: {
+                  getWeather,
+                  createDocument: createDocument({ session, dataStream }),
+                  updateDocument: updateDocument({ session, dataStream }),
+                  requestSuggestions: requestSuggestions({
+                    session,
+                    dataStream,
+                  }),
+                },
+              }),
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: 'stream-text',
@@ -269,6 +351,11 @@ export async function DELETE(request: Request) {
 
   if (!session?.user) {
     return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  if (session.user.type === 'guest') {
+    // No-op for guests; client removes from local storage
+    return Response.json({ ok: true }, { status: 200 });
   }
 
   const chat = await getChatById({ id });

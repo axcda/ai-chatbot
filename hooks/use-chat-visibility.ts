@@ -39,6 +39,9 @@ export function useChatVisibility({
     setLocalVisibility(updatedVisibilityType);
     mutate(unstable_serialize(getChatHistoryPaginationKey));
 
+    // If there is no server history cached, assume guest/local mode and skip server action
+    if (!history) return;
+
     updateChatVisibility({
       chatId: chatId,
       visibility: updatedVisibilityType,

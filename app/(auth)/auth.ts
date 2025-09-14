@@ -1,10 +1,11 @@
 import { compare } from 'bcrypt-ts';
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { createGuestUser, getUser } from '@/lib/db/queries';
+import { getUser } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 import { DUMMY_PASSWORD } from '@/lib/constants';
 import type { DefaultJWT } from 'next-auth/jwt';
+import { generateUUID } from '@/lib/utils';
 
 export type UserType = 'guest' | 'regular';
 
@@ -66,8 +67,10 @@ export const {
       id: 'guest',
       credentials: {},
       async authorize() {
-        const [guestUser] = await createGuestUser();
-        return { ...guestUser, type: 'guest' };
+        // Ephemeral guest user (no DB writes)
+        const id = generateUUID();
+        const email = `guest-${Date.now()}`;
+        return { id, email, type: 'guest' } as any;
       },
     }),
   ],

@@ -21,7 +21,19 @@ export const postRequestBodySchema = z.object({
     role: z.enum(['user']),
     parts: z.array(partSchema),
   }),
-  selectedChatModel: z.enum(['chat-model', 'chat-model-reasoning']),
+  // For guest sessions, the client may include the full prior messages
+  // so the server can preserve context without database reads.
+  previousMessages: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        role: z.enum(['user', 'assistant', 'system']),
+        parts: z.array(partSchema),
+      }),
+    )
+    .optional(),
+  // Allow dynamic model ids (e.g., "dash:qwen-plus" from DashScope)
+  selectedChatModel: z.string().min(1),
   selectedVisibilityType: z.enum(['public', 'private']),
 });
 

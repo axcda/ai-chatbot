@@ -11,16 +11,38 @@ import { convertToUIMessages } from '@/lib/utils';
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id } = params;
-  const chat = await getChatById({ id });
-
-  if (!chat) {
-    notFound();
-  }
-
   const session = await auth();
 
   if (!session) {
     redirect('/api/auth/guest');
+  }
+
+  // Guest: skip database lookups and render with client-side persistence
+  if (session.user?.type === 'guest') {
+    const cookieStore = await cookies();
+    const chatModelFromCookie = cookieStore.get('chat-model');
+
+    return (
+      <>
+        <Chat
+          id={id}
+          initialMessages={[]}
+          initialChatModel={chatModelFromCookie?.value || DEFAULT_CHAT_MODEL}
+          initialVisibilityType={'private'}
+          isReadonly={false}
+          session={session}
+          autoResume={true}
+          initialLastContext={undefined}
+        />
+        <DataStreamHandler />
+      </>
+    );
+  }
+
+  const chat = await getChatById({ id });
+
+  if (!chat) {
+    notFound();
   }
 
   if (chat.visibility === 'private') {

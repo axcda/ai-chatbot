@@ -46,7 +46,7 @@ function PureChatHeader({
         </Button>
       )}
 
-      {!isReadonly && (
+      {!isReadonly && session.user.type !== 'guest' && (
         <VisibilitySelector
           chatId={chatId}
           selectedVisibilityType={selectedVisibilityType}

@@ -23,6 +23,11 @@ export async function GET(request: NextRequest) {
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
+  // For guest users, avoid DB access and return empty history.
+  if (session.user.type === 'guest') {
+    return Response.json({ chats: [], hasMore: false });
+  }
+
   const chats = await getChatsByUserId({
     id: session.user.id,
     limit,

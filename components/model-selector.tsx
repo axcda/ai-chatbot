@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useMemo, useOptimistic, useState } from 'react';
+import { startTransition, useEffect, useMemo, useOptimistic, useState } from 'react';
 
 import { saveChatModelAsCookie } from '@/app/(chat)/actions';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { chatModels } from '@/lib/ai/models';
+import { chatModels as staticChatModels } from '@/lib/ai/models';
 import { cn } from '@/lib/utils';
 
 import { CheckCircleFillIcon, ChevronDownIcon } from './icons';
@@ -32,8 +32,24 @@ export function ModelSelector({
   const userType = session.user.type;
   const { availableChatModelIds } = entitlementsByUserType[userType];
 
+  const [dynamicModels, setDynamicModels] = useState<typeof staticChatModels | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/models')
+      .then((r) => r.json())
+      .then((json) => {
+        const models = Array.isArray(json?.models) ? json.models : [];
+        if (mounted && models.length > 0) setDynamicModels(models);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const chatModels = dynamicModels ?? staticChatModels;
   const availableChatModels = chatModels.filter((chatModel) =>
-    availableChatModelIds.includes(chatModel.id),
+    dynamicModels ? true : availableChatModelIds.includes(chatModel.id),
   );
 
   const selectedChatModel = useMemo(

@@ -3,7 +3,7 @@
 import { isToday, isYesterday, subMonths, subWeeks } from 'date-fns';
 import { useParams, useRouter } from 'next/navigation';
 import type { User } from 'next-auth';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/sidebar';
 import type { Chat } from '@/lib/db/schema';
 import { fetcher } from '@/lib/utils';
+import { getGuestChats, removeGuestChat } from '@/lib/guest-storage';
 import { ChatItem } from './sidebar-history-item';
 import useSWRInfinite from 'swr/infinite';
 import { LoaderIcon } from './icons';
@@ -96,6 +97,7 @@ export function getChatHistoryPaginationKey(
 export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { id } = useParams();
+  const isGuest = user && (user as any).type === 'guest';
 
   const {
     data: paginatedChatHistories,
@@ -103,23 +105,51 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     isValidating,
     isLoading,
     mutate,
-  } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
-    fallbackData: [],
-  });
+  } = useSWRInfinite<ChatHistory>(
+    isGuest ? () => null : getChatHistoryPaginationKey,
+    fetcher,
+    { fallbackData: [] },
+  );
+
+  const [guestChats, setGuestChats] = useState<Chat[]>([] as any);
+  useEffect(() => {
+    if (!isGuest) return;
+    setGuestChats(getGuestChats() as any);
+  }, [isGuest]);
+
+  useEffect(() => {
+    if (!isGuest) return;
+    const onUpdate = () => setGuestChats(getGuestChats() as any);
+    window.addEventListener('guest-storage-updated', onUpdate);
+    return () => window.removeEventListener('guest-storage-updated', onUpdate);
+  }, [isGuest]);
 
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const hasReachedEnd = paginatedChatHistories
+  const hasReachedEnd = isGuest
+    ? true
+    : paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)
     : false;
 
-  const hasEmptyChatHistory = paginatedChatHistories
+  const hasEmptyChatHistory = isGuest
+    ? guestChats.length === 0
+    : paginatedChatHistories
     ? paginatedChatHistories.every((page) => page.chats.length === 0)
     : false;
 
   const handleDelete = async () => {
+    if (isGuest) {
+      if (deleteId) removeGuestChat(deleteId);
+      setGuestChats(getGuestChats() as any);
+      setShowDeleteDialog(false);
+      if (deleteId === id) router.push('/');
+      toast.success('Chat deleted successfully');
+      return;
+    }
+
     const deletePromise = fetch(`/api/chat?id=${deleteId}`, {
       method: 'DELETE',
     });
@@ -160,7 +190,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     );
   }
 
-  if (isLoading) {
+  if (!isGuest && isLoading) {
     return (
       <SidebarGroup>
         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
@@ -206,11 +236,13 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu>
-            {paginatedChatHistories &&
+            {(isGuest ? true : !!paginatedChatHistories) &&
               (() => {
-                const chatsFromHistory = paginatedChatHistories.flatMap(
-                  (paginatedChatHistory) => paginatedChatHistory.chats,
-                );
+                const chatsFromHistory = isGuest
+                  ? guestChats
+                  : paginatedChatHistories.flatMap(
+                      (paginatedChatHistory) => paginatedChatHistory.chats,
+                    );
 
                 const groupedChats = groupChatsByDate(chatsFromHistory);
 
@@ -328,17 +360,19 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
             }}
           />
 
-          {hasReachedEnd ? (
+          {!isGuest && hasReachedEnd ? (
             <div className="mt-8 flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
               You have reached the end of your chat history.
             </div>
           ) : (
-            <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">
-              <div className="animate-spin">
-                <LoaderIcon />
+            !isGuest && (
+              <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">
+                <div className="animate-spin">
+                  <LoaderIcon />
+                </div>
+                <div>Loading Chats...</div>
               </div>
-              <div>Loading Chats...</div>
-            </div>
+            )
           )}
         </SidebarGroupContent>
       </SidebarGroup>

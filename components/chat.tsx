@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
-import { fetcher, fetchWithErrorHandlers, generateUUID } from '@/lib/utils';
+import { fetcher, fetchWithErrorHandlers, generateUUID, getTextFromMessage } from '@/lib/utils';
 import { Artifact } from './artifact';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
@@ -89,6 +89,10 @@ export function Chat({
             message: messages.at(-1),
             selectedChatModel: initialChatModel,
             selectedVisibilityType: visibilityType,
+            // For guest sessions, send full prior messages to preserve context server-side
+            ...(session.user.type === 'guest'
+              ? { previousMessages: messages.slice(0, -1) }
+              : {}),
             ...body,
           },
         };
@@ -138,7 +142,9 @@ export function Chat({
   }, [query, sendMessage, hasAppendedQuery, id]);
 
   const { data: votes } = useSWR<Array<Vote>>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
+    session.user.type !== 'guest' && messages.length >= 2
+      ? `/api/vote?chatId=${id}`
+      : null,
     fetcher,
   );
 
@@ -151,6 +157,42 @@ export function Chat({
     resumeStream,
     setMessages,
   });
+
+  // Guest: hydrate messages from local storage and persist on change
+  useEffect(() => {
+    if (session.user.type !== 'guest') return;
+    try {
+      const { getGuestMessages } = require('@/lib/guest-storage');
+      const saved = getGuestMessages(id);
+      if (saved && saved.length > 0) {
+        setMessages(saved);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, session.user.type]);
+
+  useEffect(() => {
+    if (session.user.type !== 'guest') return;
+    try {
+      const { setGuestMessages, upsertGuestChat } = require('@/lib/guest-storage');
+      setGuestMessages(id, messages);
+      // Ensure chat summary exists based on first user message
+      if (messages.length > 0) {
+        const firstUser = messages.find((m) => m.role === 'user');
+        const title = firstUser
+          ? getTextFromMessage(firstUser).slice(0, 60) || 'New Chat'
+          : 'New Chat';
+        upsertGuestChat({
+          id,
+          createdAt: new Date().toISOString() as any,
+          title,
+          userId: session.user.id as any,
+          visibility: visibilityType,
+          lastContext: usage as any,
+        } as any);
+      }
+    } catch {}
+  }, [id, messages, session.user.id, session.user.type, usage, visibilityType]);
 
   return (
     <>
