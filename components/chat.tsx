@@ -83,15 +83,33 @@ export function Chat({
       api: '/api/chat',
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest({ messages, id, body }) {
+        // Sanitize messages before sending to API: only allow text/file parts
+        const sanitize = (m: ChatMessage) => ({
+          id: m.id,
+          role: m.role,
+          parts: (m.parts || [])
+            .filter((p: any) =>
+              (p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0) ||
+              (p.type === 'file' && p.url && (p.name || (p as any).filename) && p.mediaType)
+            )
+            .map((p: any) =>
+              p.type === 'text'
+                ? { type: 'text', text: p.text }
+                : { type: 'file', url: p.url, name: p.name ?? (p as any).filename, mediaType: p.mediaType }
+            ),
+        });
+
+        const last = messages.at(-1) as ChatMessage | undefined;
+
         return {
           body: {
             id,
-            message: messages.at(-1),
+            message: last ? sanitize(last) : undefined,
             selectedChatModel: initialChatModel,
             selectedVisibilityType: visibilityType,
             // For guest sessions, send full prior messages to preserve context server-side
             ...(session.user.type === 'guest'
-              ? { previousMessages: messages.slice(0, -1) }
+              ? { previousMessages: messages.slice(0, -1).map(sanitize) }
               : {}),
             ...body,
           },
