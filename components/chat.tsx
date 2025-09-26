@@ -100,11 +100,19 @@ export function Chat({
         });
 
         const last = messages.at(-1) as ChatMessage | undefined;
+        const lastUser = [...messages].reverse().find((m: any) => m.role === 'user') as ChatMessage | undefined;
+        const computedMessage = (body as any)?.message
+          ? sanitize((body as any).message)
+          : last && last.role === 'user'
+            ? sanitize(last)
+            : lastUser
+              ? sanitize(lastUser)
+              : undefined;
 
         return {
           body: {
             id,
-            message: last ? sanitize(last) : undefined,
+            message: computedMessage,
             selectedChatModel: initialChatModel,
             selectedVisibilityType: visibilityType,
             // For guest sessions, send full prior messages to preserve context server-side
