@@ -6,7 +6,12 @@ import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
-import { fetcher, fetchWithErrorHandlers, generateUUID, getTextFromMessage } from '@/lib/utils';
+import {
+  fetcher,
+  fetchWithErrorHandlers,
+  generateUUID,
+  getTextFromMessage,
+} from '@/lib/utils';
 import { Artifact } from './artifact';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
@@ -174,7 +179,10 @@ export function Chat({
   useEffect(() => {
     if (session.user.type !== 'guest') return;
     try {
-      const { setGuestMessages, upsertGuestChat } = require('@/lib/guest-storage');
+      const {
+        setGuestMessages,
+        upsertGuestChat,
+      } = require('@/lib/guest-storage');
       setGuestMessages(id, messages);
       // Ensure chat summary exists based on first user message
       if (messages.length > 0) {

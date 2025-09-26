@@ -26,7 +26,7 @@ import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
 import { isProductionEnvironment } from '@/lib/constants';
-import { getLanguageModel, myProvider } from '@/lib/ai/providers';
+import { getLanguageModel } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
 import { geolocation } from '@vercel/functions';
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
       const streamId = generateUUID();
 
       const isDash = selectedChatModel.startsWith('dash:');
-      const activeToolsGuest: ('getWeather')[] | undefined = isDash
+      const activeToolsGuest: 'getWeather'[] | undefined = isDash
         ? undefined
         : selectedChatModel === 'chat-model-reasoning'
           ? undefined
@@ -233,13 +233,23 @@ export async function POST(request: Request) {
     let finalUsage: LanguageModelUsage | undefined;
 
     const isDash = selectedChatModel.startsWith('dash:');
-    const activeTools: (
-      'getWeather' | 'createDocument' | 'updateDocument' | 'requestSuggestions'
-    )[] | undefined = isDash
+    const activeTools:
+      | (
+          | 'getWeather'
+          | 'createDocument'
+          | 'updateDocument'
+          | 'requestSuggestions'
+        )[]
+      | undefined = isDash
       ? undefined
       : selectedChatModel === 'chat-model-reasoning'
         ? undefined
-        : ['getWeather', 'createDocument', 'updateDocument', 'requestSuggestions'];
+        : [
+            'getWeather',
+            'createDocument',
+            'updateDocument',
+            'requestSuggestions',
+          ];
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {

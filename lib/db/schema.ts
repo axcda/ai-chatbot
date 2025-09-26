@@ -17,6 +17,17 @@ export const user = pgTable('User', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   email: varchar('email', { length: 64 }).notNull(),
   password: varchar('password', { length: 64 }),
+  firebaseUid: varchar('firebaseUid', { length: 128 }),
+  authProvider: varchar('authProvider', {
+    length: 20,
+    enum: ['firebase', 'legacy', 'guest'],
+  })
+    .notNull()
+    .default('firebase'),
+  displayName: varchar('displayName', { length: 100 }),
+  avatarUrl: text('avatarUrl'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -171,3 +182,15 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+export const inviteCodeUsage = pgTable('InviteCodeUsage', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  code: varchar('code', { length: 50 }).notNull(),
+  usedBy: varchar('usedBy', { length: 128 }).notNull(),
+  userEmail: varchar('userEmail', { length: 64 }).notNull(),
+  usedAt: timestamp('usedAt').notNull().defaultNow(),
+  ipAddress: varchar('ipAddress', { length: 45 }),
+  userAgent: text('userAgent'),
+});
+
+export type InviteCodeUsage = InferSelectModel<typeof inviteCodeUsage>;

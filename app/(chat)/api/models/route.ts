@@ -4,8 +4,9 @@ export const revalidate = 0; // always fetch fresh in dev
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function normalizeModels(data: any): Array<{ id: string; name: string; description: string }>
-{
+function normalizeModels(
+  data: any,
+): Array<{ id: string; name: string; description: string }> {
   const candidates: any[] = [];
   if (Array.isArray(data)) candidates.push(...data);
   if (Array.isArray(data?.data)) candidates.push(...data.data);
@@ -27,7 +28,11 @@ function normalizeModels(data: any): Array<{ id: string; name: string; descripti
         description: m?.description || 'DashScope model',
       };
     })
-    .filter(Boolean) as Array<{ id: string; name: string; description: string }>;
+    .filter(Boolean) as Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>;
   return models;
 }
 
@@ -76,6 +81,9 @@ export async function GET() {
 
     return Response.json({ models });
   } catch (error) {
-    return new ChatSDKError('offline:chat', 'Failed to fetch models').toResponse();
+    return new ChatSDKError(
+      'offline:chat',
+      'Failed to fetch models',
+    ).toResponse();
   }
 }

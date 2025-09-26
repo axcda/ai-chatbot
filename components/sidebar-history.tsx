@@ -3,7 +3,7 @@
 import { isToday, isYesterday, subMonths, subWeeks } from 'date-fns';
 import { useParams, useRouter } from 'next/navigation';
 import type { User } from 'next-auth';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
@@ -131,14 +131,14 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const hasReachedEnd = isGuest
     ? true
     : paginatedChatHistories
-    ? paginatedChatHistories.some((page) => page.hasMore === false)
-    : false;
+      ? paginatedChatHistories.some((page) => page.hasMore === false)
+      : false;
 
   const hasEmptyChatHistory = isGuest
     ? guestChats.length === 0
     : paginatedChatHistories
-    ? paginatedChatHistories.every((page) => page.chats.length === 0)
-    : false;
+      ? paginatedChatHistories.every((page) => page.chats.length === 0)
+      : false;
 
   const handleDelete = async () => {
     if (isGuest) {

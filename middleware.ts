@@ -1,6 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
-import { guestRegex, isDevelopmentEnvironment } from './lib/constants';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,28 +11,59 @@ export async function middleware(request: NextRequest) {
     return new Response('pong', { status: 200 });
   }
 
-  if (pathname.startsWith('/api/auth')) {
+  // 允许认证API端点与健康检查无需验证
+  if (
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/health') ||
+    pathname === '/health'
+  ) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
+  // 公开路由不需要认证
+  const publicRoutes = [
+    '/login',
+    '/register',
+    '/migrate',
+    '/forgot-password',
+    '/reset-password',
+    '/terms',
+    '/privacy',
+    '/about',
+    '/help',
+  ];
+  if (publicRoutes.includes(pathname)) {
+    return NextResponse.next();
+  }
 
-  if (!token) {
+  // 静态资源和API路由
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  // 获取Authorization header
+  const authHeader = request.headers.get('Authorization');
+  let token: string | null = null;
+
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  }
+
+  // 如果是页面请求且没有token，重定向到登录页
+  if (!token && !pathname.startsWith('/api')) {
     const redirectUrl = encodeURIComponent(request.url);
-
     return NextResponse.redirect(
-      new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
+      new URL(`/login?redirect=${redirectUrl}`, request.url),
     );
   }
 
-  const isGuest = guestRegex.test(token?.email ?? '');
-
-  if (token && !isGuest && ['/login', '/register'].includes(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
+  // 不能在 Edge Middleware 使用 firebase-admin（Node-only）。
+  // 这里只做“是否存在 Token”的轻量检查；具体校验在各 API 路由中完成。
+  if (!token && !pathname.startsWith('/api')) {
+    const redirectUrl = encodeURIComponent(request.url);
+    return NextResponse.redirect(
+      new URL(`/login?redirect=${redirectUrl}`, request.url),
+    );
   }
 
   return NextResponse.next();
@@ -42,18 +71,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/',
-    '/chat/:id',
-    '/api/:path*',
-    '/login',
-    '/register',
-
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico, sitemap.xml, robots.txt (metadata files)
+     * - /ping (health check for tests)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|ping).*)',
   ],
 };

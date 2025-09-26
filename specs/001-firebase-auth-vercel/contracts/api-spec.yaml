@@ -1,0 +1,448 @@
+openapi: 3.0.3
+info:
+  title: Firebase Auth API - AI Chatbot
+  description: API for Firebase Authentication integration with invite code system
+  version: 1.0.0
+  contact:
+    name: AI Chatbot Team
+    email: team@ai-chatbot.com
+servers:
+  - url: https://ai-chatbot.vercel.app/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/validate-invite:
+    post:
+      summary: Validate invite code
+      description: Validates an invite code against the configured list
+      tags:
+        - Authentication
+      security: []  # Public endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateInviteRequest'
+      responses:
+        '200':
+          description: Invite code validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateInviteResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Creates a new user account with Firebase authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: User registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Invalid request or invite code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Firebase token verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/migrate-user:
+    post:
+      summary: Migrate existing user to Firebase
+      description: Migrates an existing NextAuth user to Firebase authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrateUserRequest'
+      responses:
+        '200':
+          description: User migration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrateUserResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Firebase token verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/sync-user:
+    post:
+      summary: Sync user data from Firebase
+      description: Updates local user data with Firebase user information
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncUserRequest'
+      responses:
+        '200':
+          description: User data sync successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncUserResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Firebase token verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      summary: Health check
+      description: Checks the health status of authentication services
+      tags:
+        - Health
+      security: []  # Public endpoint
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID Token
+
+  schemas:
+    ValidateInviteRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          minLength: 2
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9\-_]+$'
+          description: Invite code to validate
+          example: 'alpha'
+
+    ValidateInviteResponse:
+      type: object
+      required:
+        - valid
+        - reason
+      properties:
+        valid:
+          type: boolean
+          description: Whether the invite code is valid
+        reason:
+          type: string
+          description: Validation result message
+          examples:
+            - '邀请码有效'
+            - '邀请码无效'
+            - '邀请码不能为空'
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - firebaseUid
+        - inviteCode
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 64
+          description: User email address
+          example: 'user@example.com'
+        firebaseUid:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Firebase user UID
+          example: 'firebase-uid-123'
+        inviteCode:
+          type: string
+          minLength: 2
+          maxLength: 50
+          description: Valid invite code
+          example: 'alpha'
+        displayName:
+          type: string
+          maxLength: 100
+          description: User display name
+          example: 'John Doe'
+        avatarUrl:
+          type: string
+          format: uri
+          description: User avatar URL
+          example: 'https://example.com/avatar.jpg'
+
+    RegisterResponse:
+      type: object
+      required:
+        - success
+        - userId
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          description: Registration success status
+        userId:
+          type: string
+          format: uuid
+          description: Created user ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+
+    MigrateUserRequest:
+      type: object
+      required:
+        - email
+        - firebaseUid
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 64
+          description: User email address
+          example: 'existing@example.com'
+        firebaseUid:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Firebase user UID
+          example: 'firebase-uid-456'
+
+    MigrateUserResponse:
+      type: object
+      required:
+        - success
+        - userId
+        - migrated
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          description: Migration success status
+        userId:
+          type: string
+          format: uuid
+          description: User ID
+          example: '123e4567-e89b-12d3-a456-426614174000'
+        migrated:
+          type: boolean
+          enum: [true]
+          description: Indicates this was a migration operation
+
+    SyncUserRequest:
+      type: object
+      required:
+        - firebaseUid
+        - userData
+      properties:
+        firebaseUid:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Firebase user UID
+          example: 'firebase-uid-789'
+        userData:
+          type: object
+          properties:
+            displayName:
+              type: string
+              maxLength: 100
+              description: Updated display name
+              example: 'John Updated'
+            photoURL:
+              type: string
+              format: uri
+              description: Updated avatar URL
+              example: 'https://example.com/new-avatar.jpg'
+
+    SyncUserResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+          description: Sync success status
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - services
+      properties:
+        status:
+          type: string
+          enum: ['healthy']
+          description: Overall health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+          example: '2025-09-20T10:30:00Z'
+        services:
+          type: object
+          required:
+            - firebase
+            - postgresql
+          properties:
+            firebase:
+              type: string
+              enum: ['connected']
+              description: Firebase connection status
+            postgresql:
+              type: string
+              enum: ['connected']
+              description: PostgreSQL connection status
+
+    HealthErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum: ['unhealthy']
+          description: Overall health status
+        error:
+          type: string
+          description: Error description
+          example: 'Firebase connection failed'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          examples:
+            - '邀请码无效'
+            - '权限验证失败'
+            - '用户已存在'
+            - '注册失败'
+        details:
+          type: string
+          description: Additional error details
+          example: 'Firebase token validation failed'
+        code:
+          type: string
+          description: Error code for client handling
+          examples:
+            - 'INVALID_INVITE_CODE'
+            - 'TOKEN_VERIFICATION_FAILED'
+            - 'USER_EXISTS'
+            - 'REGISTRATION_FAILED'
+
+tags:
+  - name: Authentication
+    description: Firebase authentication operations
+  - name: Health
+    description: Service health monitoring
