@@ -47,5 +47,41 @@ export const CheckIcon = createStableIcon([
   { d: 'M20 6L9 17l-5-5' },
 ]);
 
+export const ArrowDownIcon = (Lucide as any).ArrowDownIcon ?? Lucide.ArrowDown;
+export const ArrowLeftIcon = (Lucide as any).ArrowLeftIcon ?? Lucide.ArrowLeft;
+export const ArrowRightIcon = (Lucide as any).ArrowRightIcon ?? Lucide.ArrowRight;
+export const BookIcon = (Lucide as any).BookIcon ?? Lucide.Book;
+export const BrainIcon = (Lucide as any).BrainIcon ?? Lucide.Brain;
+export const CheckCircleIcon =
+  (Lucide as any).CheckCircleIcon ?? Lucide.CheckCircle;
+export const ChevronDownIcon =
+  (Lucide as any).ChevronDownIcon ?? Lucide.ChevronDown;
+export const ChevronLeftIcon =
+  (Lucide as any).ChevronLeftIcon ?? Lucide.ChevronLeft;
+export const ChevronRightIcon =
+  (Lucide as any).ChevronRightIcon ?? Lucide.ChevronRight;
+export const ChevronUpIcon =
+  (Lucide as any).ChevronUpIcon ?? Lucide.ChevronUp;
+export const CircleIcon = (Lucide as any).CircleIcon ?? Lucide.Circle;
+export const ClockIcon = (Lucide as any).ClockIcon ?? Lucide.Clock;
+export const Loader2Icon = (Lucide as any).Loader2Icon ?? Lucide.Loader2;
+export const SearchIcon = (Lucide as any).SearchIcon ?? Lucide.Search;
+export const SendIcon = (Lucide as any).SendIcon ?? Lucide.Send;
+export const SquareIcon = (Lucide as any).SquareIcon ?? Lucide.Square;
+export const WrenchIcon = (Lucide as any).WrenchIcon ?? Lucide.Wrench;
+export const XCircleIcon = (Lucide as any).XCircleIcon ?? Lucide.XCircle;
+export const XIcon = (Lucide as any).XIcon ?? Lucide.X;
+
+export const ArrowDown = Lucide.ArrowDown;
+export const ArrowLeft = Lucide.ArrowLeft;
+export const ArrowRight = Lucide.ArrowRight;
+export const ChevronDown = Lucide.ChevronDown;
+export const ChevronLeft = Lucide.ChevronLeft;
+export const ChevronRight = Lucide.ChevronRight;
+export const ChevronUp = Lucide.ChevronUp;
+export const PanelLeft = Lucide.PanelLeft;
+export const Check = Lucide.Check;
+export const Circle = Lucide.Circle;
+
 export * from 'lucide-react/dist/esm/lucide-react';
 export default Lucide;
