@@ -8,7 +8,7 @@ import { PlusIcon, } from './icons';
 import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
-import type { User } from '@supabase/supabase-js';
+import type { CookieUser } from '@/lib/auth/types';
 
 function PureChatHeader({
   chatId,
@@ -19,7 +19,7 @@ function PureChatHeader({
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
-  user: User | null;
+  user: CookieUser | null;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
