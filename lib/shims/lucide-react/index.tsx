@@ -81,16 +81,8 @@ export const WrenchIcon = (Lucide as any).WrenchIcon ?? (Lucide as any).Wrench;
 export const XCircleIcon = (Lucide as any).XCircleIcon ?? (Lucide as any).XCircle;
 export const XIcon = (Lucide as any).XIcon ?? (Lucide as any).X;
 
-export const ArrowDown = Lucide.ArrowDown;
-export const ArrowLeft = Lucide.ArrowLeft;
-export const ArrowRight = Lucide.ArrowRight;
-export const ChevronDown = Lucide.ChevronDown;
-export const ChevronLeft = Lucide.ChevronLeft;
-export const ChevronRight = Lucide.ChevronRight;
-export const ChevronUp = Lucide.ChevronUp;
-export const PanelLeft = Lucide.PanelLeft;
-export const Check = Lucide.Check;
-export const Circle = Lucide.Circle;
+// Base icon names are re-exported below from lucide's ESM bundle. Avoid
+// duplicating them here to prevent circular self-references during typing.
 
 export * from 'lucide-react/dist/esm/lucide-react';
 export default Lucide;
