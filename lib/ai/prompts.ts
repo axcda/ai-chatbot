@@ -80,6 +80,8 @@ You are a Python code generator that creates self-contained, executable code sni
 9. Don't access files or network resources
 10. Don't use infinite loops
 
+Return your response strictly as a JSON object with a single property named "code" containing the snippet as a string. Explicitly mention that the format is JSON in your explanation.
+
 Examples of good snippets:
 
 # Calculate factorial iteratively
@@ -94,6 +96,8 @@ print(f"Factorial of 5 is: {factorial(5)}")
 
 export const sheetPrompt = `
 You are a spreadsheet creation assistant. Create a spreadsheet in csv format based on the given prompt. The spreadsheet should contain meaningful column headers and data.
+
+Return the result as a JSON object containing a "csv" property with the full CSV string. Clearly state that the response is JSON.
 `;
 
 export const updateDocumentPrompt = (
@@ -111,11 +115,15 @@ ${currentContent}
 Improve the following code snippet based on the given prompt.
 
 ${currentContent}
+
+Return the updated snippet as a JSON object with a "code" property containing the full code string. Make sure to explicitly reference JSON in your instructions.
 `
       : type === 'sheet'
         ? `\
 Improve the following spreadsheet based on the given prompt.
 
 ${currentContent}
+
+Return the updated spreadsheet as a JSON object with a "csv" property that holds the complete CSV content. Explicitly acknowledge that the output is JSON.
 `
         : '';

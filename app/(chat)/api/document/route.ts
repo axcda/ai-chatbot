@@ -1,11 +1,41 @@
-import { auth } from '@/app/(auth)/auth';
+
 import type { ArtifactKind } from '@/components/artifact';
 import {
   deleteDocumentsByIdAfterTimestamp,
+  ensureUserRecord,
   getDocumentsById,
   saveDocument,
 } from '@/lib/db/queries';
 import { ChatSDKError } from '@/lib/errors';
+import { createClient } from '@/lib/supabase/server';
+
+async function getAuthenticatedUser() {
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    console.warn('Supabase client initialization failed in document API.', error);
+    throw new ChatSDKError('unauthorized:document');
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in document API.', error);
+    throw new ChatSDKError('unauthorized:document');
+  }
+
+  if (!user) {
+    throw new ChatSDKError('unauthorized:document');
+  }
+
+  await ensureUserRecord({ id: user.id, email: user.email });
+
+  return user;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,10 +48,14 @@ export async function GET(request: Request) {
     ).toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError('unauthorized:document').toResponse();
+  let user: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  try {
+    user = await getAuthenticatedUser();
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      return error.toResponse();
+    }
+    throw error;
   }
 
   const documents = await getDocumentsById({ id });
@@ -32,7 +66,7 @@ export async function GET(request: Request) {
     return new ChatSDKError('not_found:document').toResponse();
   }
 
-  if (document.userId !== session.user.id) {
+  if (document.userId !== user.id) {
     return new ChatSDKError('forbidden:document').toResponse();
   }
 
@@ -50,10 +84,14 @@ export async function POST(request: Request) {
     ).toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError('not_found:document').toResponse();
+  let user: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  try {
+    user = await getAuthenticatedUser();
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      return error.toResponse();
+    }
+    throw error;
   }
 
   const {
@@ -68,7 +106,7 @@ export async function POST(request: Request) {
   if (documents.length > 0) {
     const [document] = documents;
 
-    if (document.userId !== session.user.id) {
+    if (document.userId !== user.id) {
       return new ChatSDKError('forbidden:document').toResponse();
     }
   }
@@ -78,7 +116,7 @@ export async function POST(request: Request) {
     content,
     title,
     kind,
-    userId: session.user.id,
+    userId: user.id,
   });
 
   return Response.json(document, { status: 200 });
@@ -103,17 +141,21 @@ export async function DELETE(request: Request) {
     ).toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError('unauthorized:document').toResponse();
+  let user: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  try {
+    user = await getAuthenticatedUser();
+  } catch (error) {
+    if (error instanceof ChatSDKError) {
+      return error.toResponse();
+    }
+    throw error;
   }
 
   const documents = await getDocumentsById({ id });
 
   const [document] = documents;
 
-  if (document.userId !== session.user.id) {
+  if (document.userId !== user.id) {
     return new ChatSDKError('forbidden:document').toResponse();
   }
 

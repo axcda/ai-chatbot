@@ -1,4 +1,4 @@
-import { auth } from '@/app/(auth)/auth';
+import { createClient } from '@/lib/supabase/server';
 import type { NextRequest } from 'next/server';
 import { getChatsByUserId } from '@/lib/db/queries';
 import { ChatSDKError } from '@/lib/errors';
@@ -17,19 +17,34 @@ export async function GET(request: NextRequest) {
     ).toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    console.warn('Supabase client initialization failed in history API.', error);
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
-  // For guest users, avoid DB access and return empty history.
-  if (session.user.type === 'guest') {
-    return Response.json({ chats: [], hasMore: false });
+  if (!supabase) {
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in history API.', error);
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  if (!user) {
+    return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
   const chats = await getChatsByUserId({
-    id: session.user.id,
+    id: user.id,
     limit,
     startingAfter,
     endingBefore,

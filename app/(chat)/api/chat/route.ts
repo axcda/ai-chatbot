@@ -7,11 +7,13 @@ import {
   stepCountIs,
   streamText,
 } from 'ai';
-import { auth, type UserType } from '@/app/(auth)/auth';
+import { createClient } from '@/lib/supabase/server';
+import type { UserType } from '@/lib/auth/types';
 import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
 import {
   createStreamId,
   deleteChatById,
+  ensureUserRecord,
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
@@ -26,7 +28,7 @@ import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
 import { isProductionEnvironment } from '@/lib/constants';
-import { getLanguageModel, myProvider } from '@/lib/ai/providers';
+import { getLanguageModel } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
 import { geolocation } from '@vercel/functions';
@@ -87,16 +89,37 @@ export async function POST(request: Request) {
       selectedVisibilityType: VisibilityType;
     } = requestBody;
 
-    const session = await auth();
-
-    if (!session?.user) {
-      return new ChatSDKError('unauthorized:chat').toResponse();
+    let supabase: Awaited<ReturnType<typeof createClient>> | null = null; // Supabase client may be unavailable during local development
+    try {
+      supabase = await createClient();
+    } catch (clientError) {
+      console.warn('Supabase client initialization failed in chat POST.', clientError);
     }
 
-    const userType: UserType = session.user.type;
+    let authenticatedUser: { id: string; email?: string | null } | null = null;
+
+    if (supabase) {
+      const {
+        data: { user: supabaseUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        console.warn('Supabase getUser failed in chat POST.', authError);
+      }
+
+      if (supabaseUser) {
+        authenticatedUser = {
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+        };
+      }
+    }
+
+    const userType: UserType = authenticatedUser ? 'authenticated' : 'unauthenticated';
 
     // Guest sessions: skip all database reads/writes and rely on client context
-    if (userType === 'guest') {
+    if (userType === 'unauthenticated') {
       const uiMessages = [...(requestBody.previousMessages ?? []), message];
 
       const { longitude, latitude, city, country } = geolocation(request);
@@ -112,7 +135,7 @@ export async function POST(request: Request) {
       const streamId = generateUUID();
 
       const isDash = selectedChatModel.startsWith('dash:');
-      const activeToolsGuest: ('getWeather')[] | undefined = isDash
+      const activeToolsGuest: 'getWeather'[] | undefined = isDash
         ? undefined
         : selectedChatModel === 'chat-model-reasoning'
           ? undefined
@@ -174,36 +197,14 @@ export async function POST(request: Request) {
       }
     }
 
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
+    if (!authenticatedUser) {
+      return new ChatSDKError('unauthorized:chat').toResponse();
+    }
+
+    await ensureUserRecord({
+      id: authenticatedUser.id,
+      email: authenticatedUser.email,
     });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError('rate_limit:chat').toResponse();
-    }
-
-    const chat = await getChatById({ id });
-
-    if (!chat) {
-      const title = await generateTitleFromUserMessage({
-        message,
-      });
-
-      await saveChat({
-        id,
-        userId: session.user.id,
-        title,
-        visibility: selectedVisibilityType,
-      });
-    } else {
-      if (chat.userId !== session.user.id) {
-        return new ChatSDKError('forbidden:chat').toResponse();
-      }
-    }
-
-    const messagesFromDb = await getMessagesByChatId({ id });
-    const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -213,6 +214,37 @@ export async function POST(request: Request) {
       city,
       country,
     };
+
+    const messageCount = await getMessageCountByUserId({
+      id: authenticatedUser.id,
+      differenceInHours: 24,
+    });
+
+    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+      return new ChatSDKError('rate_limit:chat').toResponse();
+    }
+
+    const existingChat = await getChatById({ id });
+
+    if (existingChat) {
+      if (existingChat.userId !== authenticatedUser.id) {
+        return new ChatSDKError('forbidden:chat').toResponse();
+      }
+    } else {
+      const title = await generateTitleFromUserMessage({
+        message,
+      });
+
+      await saveChat({
+        id,
+        userId: authenticatedUser.id,
+        title,
+        visibility: selectedVisibilityType,
+      });
+    }
+
+    const messagesFromDb = await getMessagesByChatId({ id });
+    const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
     await saveMessages({
       messages: [
@@ -232,15 +264,6 @@ export async function POST(request: Request) {
 
     let finalUsage: LanguageModelUsage | undefined;
 
-    const isDash = selectedChatModel.startsWith('dash:');
-    const activeTools: (
-      'getWeather' | 'createDocument' | 'updateDocument' | 'requestSuggestions'
-    )[] | undefined = isDash
-      ? undefined
-      : selectedChatModel === 'chat-model-reasoning'
-        ? undefined
-        : ['getWeather', 'createDocument', 'updateDocument', 'requestSuggestions'];
-
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
@@ -248,21 +271,33 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
-          experimental_activeTools: activeTools,
+          experimental_activeTools:
+            selectedChatModel === 'chat-model-reasoning'
+              ? []
+              : [
+                  'getWeather',
+                  'createDocument',
+                  'updateDocument',
+                  'requestSuggestions',
+                ],
           experimental_transform: smoothStream({ chunking: 'word' }),
-          ...(isDash
-            ? {}
-            : {
-                tools: {
-                  getWeather,
-                  createDocument: createDocument({ session, dataStream }),
-                  updateDocument: updateDocument({ session, dataStream }),
-                  requestSuggestions: requestSuggestions({
-                    session,
-                    dataStream,
-                  }),
-                },
-              }),
+          tools: {
+            getWeather,
+            createDocument: createDocument({
+              dataStream,
+              userId: authenticatedUser.id,
+              userEmail: authenticatedUser.email,
+            }),
+            updateDocument: updateDocument({
+              dataStream,
+              userId: authenticatedUser.id,
+              userEmail: authenticatedUser.email,
+            }),
+            requestSuggestions: requestSuggestions({
+              dataStream,
+              userId: authenticatedUser.id,
+            }),
+          },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: 'stream-text',
@@ -284,10 +319,10 @@ export async function POST(request: Request) {
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
         await saveMessages({
-          messages: messages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            parts: message.parts,
+          messages: messages.map((currentMessage) => ({
+            id: currentMessage.id,
+            role: currentMessage.role,
+            parts: currentMessage.parts,
             createdAt: new Date(),
             attachments: [],
             chatId: id,
@@ -300,8 +335,8 @@ export async function POST(request: Request) {
               chatId: id,
               context: finalUsage,
             });
-          } catch (err) {
-            console.warn('Unable to persist last usage for chat', id, err);
+          } catch (persistError) {
+            console.warn('Unable to persist last usage for chat', id, persistError);
           }
         }
       },
@@ -318,9 +353,9 @@ export async function POST(request: Request) {
           stream.pipeThrough(new JsonToSseTransformStream()),
         ),
       );
-    } else {
-      return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
     }
+
+    return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
@@ -349,20 +384,39 @@ export async function DELETE(request: Request) {
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
+    let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (clientError) {
+    console.warn('Supabase client initialization failed in chat DELETE.', clientError);
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
-  if (session.user.type === 'guest') {
-    // No-op for guests; client removes from local storage
-    return Response.json({ ok: true }, { status: 200 });
+  if (!supabase) {
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in chat DELETE.', error);
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  if (!user) {
+    return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
   const chat = await getChatById({ id });
 
-  if (chat?.userId !== session.user.id) {
+  if (!chat) {
+    return new ChatSDKError('not_found:chat').toResponse();
+  }
+
+  if (chat.userId !== user.id) {
     return new ChatSDKError('forbidden:chat').toResponse();
   }
 

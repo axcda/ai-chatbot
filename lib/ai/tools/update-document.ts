@@ -1,16 +1,20 @@
 import { tool, type UIMessageStreamWriter } from 'ai';
-import type { Session } from 'next-auth';
 import { z } from 'zod';
 import { getDocumentById } from '@/lib/db/queries';
 import { documentHandlersByArtifactKind } from '@/lib/artifacts/server';
 import type { ChatMessage } from '@/lib/types';
 
 interface UpdateDocumentProps {
-  session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
+  userId?: string;
+  userEmail?: string | null;
 }
 
-export const updateDocument = ({ session, dataStream }: UpdateDocumentProps) =>
+export const updateDocument = ({
+  dataStream,
+  userId,
+  userEmail,
+}: UpdateDocumentProps) =>
   tool({
     description: 'Update a document with the given description.',
     inputSchema: z.object({
@@ -25,6 +29,12 @@ export const updateDocument = ({ session, dataStream }: UpdateDocumentProps) =>
       if (!document) {
         return {
           error: 'Document not found',
+        };
+      }
+
+      if (userId && document.userId && document.userId !== userId) {
+        return {
+          error: 'Forbidden',
         };
       }
 
@@ -47,7 +57,10 @@ export const updateDocument = ({ session, dataStream }: UpdateDocumentProps) =>
         document,
         description,
         dataStream,
-        session,
+        context: {
+          userId,
+          userEmail,
+        },
       });
 
       dataStream.write({ type: 'data-finish', data: null, transient: true });

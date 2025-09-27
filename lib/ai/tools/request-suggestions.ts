@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { Session } from 'next-auth';
 import { streamObject, tool, type UIMessageStreamWriter } from 'ai';
 import { getDocumentById, saveSuggestions } from '@/lib/db/queries';
 import type { Suggestion } from '@/lib/db/schema';
@@ -8,13 +7,13 @@ import { myProvider } from '../providers';
 import type { ChatMessage } from '@/lib/types';
 
 interface RequestSuggestionsProps {
-  session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
+  userId?: string;
 }
 
 export const requestSuggestions = ({
-  session,
   dataStream,
+  userId,
 }: RequestSuggestionsProps) =>
   tool({
     description: 'Request suggestions for a document',
@@ -32,6 +31,12 @@ export const requestSuggestions = ({
         };
       }
 
+      if (userId && document.userId && document.userId !== userId) {
+        return {
+          error: 'Forbidden',
+        };
+      }
+
       const suggestions: Array<
         Omit<Suggestion, 'userId' | 'createdAt' | 'documentCreatedAt'>
       > = [];
@@ -39,7 +44,7 @@ export const requestSuggestions = ({
       const { elementStream } = streamObject({
         model: myProvider.languageModel('artifact-model'),
         system:
-          'You are a help writing assistant. Given a piece of writing, please offer suggestions to improve the piece of writing and describe the change. It is very important for the edits to contain full sentences instead of just words. Max 5 suggestions.',
+          'You are a help writing assistant. Given a piece of writing, please offer suggestions to improve the piece of writing and describe the change. It is very important for the edits to contain full sentences instead of just words. Max 5 suggestions. Always respond with a JSON array of suggestion objects so the output format is explicitly JSON.',
         prompt: document.content,
         output: 'array',
         schema: z.object({
@@ -69,18 +74,14 @@ export const requestSuggestions = ({
         suggestions.push(suggestion);
       }
 
-      if (session.user?.id) {
-        const userId = session.user.id;
-
-        await saveSuggestions({
-          suggestions: suggestions.map((suggestion) => ({
-            ...suggestion,
-            userId,
-            createdAt: new Date(),
-            documentCreatedAt: document.createdAt,
-          })),
-        });
-      }
+      await saveSuggestions({
+        suggestions: suggestions.map((suggestion) => ({
+          ...suggestion,
+          userId: userId ?? document.userId,
+          createdAt: new Date(),
+          documentCreatedAt: document.createdAt,
+        })),
+      });
 
       return {
         id: documentId,

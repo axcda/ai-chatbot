@@ -9,7 +9,6 @@ import { AuthForm } from '@/components/auth-form';
 import { SubmitButton } from '@/components/submit-button';
 
 import { login, type LoginActionState } from '../actions';
-import { useSession } from 'next-auth/react';
 
 export default function Page() {
   const router = useRouter();
@@ -24,13 +23,13 @@ export default function Page() {
     },
   );
 
-  const { update: updateSession } = useSession();
-
   useEffect(() => {
+    if (!state) return;
+
     if (state.status === 'failed') {
       toast({
         type: 'error',
-        description: 'Invalid credentials!',
+        description: state.message || 'Invalid credentials!',
       });
     } else if (state.status === 'invalid_data') {
       toast({
@@ -39,10 +38,14 @@ export default function Page() {
       });
     } else if (state.status === 'success') {
       setIsSuccessful(true);
-      updateSession();
+      toast({
+        type: 'success',
+        description: 'Successfully signed in!',
+      });
+      router.push('/');
       router.refresh();
     }
-  }, [state.status, router, updateSession]);
+  }, [state?.status, state?.message, router]);
 
   const handleSubmit = (formData: FormData) => {
     setEmail(formData.get('email') as string);

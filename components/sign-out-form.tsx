@@ -1,25 +1,17 @@
-import Form from 'next/form';
+'use client';
 
-import { signOut } from '@/app/(auth)/auth';
+import { useAuth } from '@/contexts/auth-context';
 
 export const SignOutForm = () => {
-  return (
-    <Form
-      className="w-full"
-      action={async () => {
-        'use server';
+  const { signOut } = useAuth();
 
-        await signOut({
-          redirectTo: '/',
-        });
-      }}
+  return (
+    <button
+      type="button"
+      className="w-full px-1 py-0.5 text-left text-red-500"
+      onClick={() => signOut()}
     >
-      <button
-        type="submit"
-        className="w-full px-1 py-0.5 text-left text-red-500"
-      >
-        Sign out
-      </button>
-    </Form>
+      Sign out
+    </button>
   );
 };

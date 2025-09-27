@@ -17,22 +17,21 @@ import postgres from 'postgres';
 
 import {
   user,
-  chat,
   type User,
+  chat,
   document,
   type Suggestion,
   suggestion,
   message,
-  vote,
   type DBMessage,
-  type Chat,
   stream,
+  vote,
 } from './schema';
 import type { ArtifactKind } from '@/components/artifact';
-import { generateUUID } from '../utils';
-import { generateHashedPassword } from './utils';
 import type { VisibilityType } from '@/components/visibility-selector';
+import { generateUUID } from '../utils';
 import { ChatSDKError } from '../errors';
+import { generateHashedPassword } from './utils';
 import type { LanguageModelV2Usage } from '@ai-sdk/provider';
 
 // Optionally, if not using email/pass login, you can
@@ -81,6 +80,31 @@ export async function createGuestUser() {
   }
 }
 
+export async function ensureUserRecord({
+  id,
+  email,
+}: {
+  id: string;
+  email?: string | null;
+}) {
+  const fallbackEmail = `${id}@supabase.local`;
+
+  try {
+    await db
+      .insert(user)
+      .values({
+        id,
+        email: (email && email.length > 0 ? email : fallbackEmail).slice(0, 64),
+      })
+      .onConflictDoNothing({ target: user.id });
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to ensure user record exists',
+    );
+  }
+}
+
 export async function saveChat({
   id,
   userId,
@@ -115,12 +139,10 @@ export async function deleteChatById({ id }: { id: string }) {
       .delete(chat)
       .where(eq(chat.id, id))
       .returning();
+
     return chatsDeleted;
   } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to delete chat by id',
-    );
+    throw new ChatSDKError('bad_request:database', 'Failed to delete chat by id');
   }
 }
 
@@ -150,7 +172,7 @@ export async function getChatsByUserId({
         .orderBy(desc(chat.createdAt))
         .limit(extendedLimit);
 
-    let filteredChats: Array<Chat> = [];
+    let filteredChats: Chat[] = [];
 
     if (startingAfter) {
       const [selectedChat] = await db
@@ -203,6 +225,7 @@ export async function getChatsByUserId({
 export async function getChatById({ id }: { id: string }) {
   try {
     const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
+
     if (!selectedChat) {
       return null;
     }
@@ -261,6 +284,7 @@ export async function voteMessage({
         .set({ isUpvoted: type === 'up' })
         .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
     }
+
     return await db.insert(vote).values({
       chatId,
       messageId,
@@ -434,7 +458,9 @@ export async function deleteMessagesByChatIdAfterTimestamp({
         and(eq(message.chatId, chatId), gte(message.createdAt, timestamp)),
       );
 
-    const messageIds = messagesToDelete.map((message) => message.id);
+    const messageIds = messagesToDelete.map(
+      (currentMessage) => currentMessage.id,
+    );
 
     if (messageIds.length > 0) {
       await db
@@ -520,10 +546,13 @@ export async function getMessageCountByUserId({
 
     return stats?.count ?? 0;
   } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to get message count by user id',
+    console.warn(
+      'Failed to get message count by user id. Falling back to zero.',
+      id,
+      error,
     );
+
+    return 0;
   }
 }
 
@@ -539,9 +568,11 @@ export async function createStreamId({
       .insert(stream)
       .values({ id: streamId, chatId, createdAt: new Date() });
   } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to create stream id',
+    console.warn(
+      'Failed to persist stream id. Continuing without database sync.',
+      streamId,
+      chatId,
+      error,
     );
   }
 }
@@ -557,9 +588,12 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
 
     return streamIds.map(({ id }) => id);
   } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to get stream ids by chat id',
+    console.warn(
+      'Failed to load stream ids for chat. Returning empty list.',
+      chatId,
+      error,
     );
+
+    return [];
   }
 }

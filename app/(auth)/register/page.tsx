@@ -9,7 +9,6 @@ import { SubmitButton } from '@/components/submit-button';
 
 import { register, type RegisterActionState } from '../actions';
 import { toast } from '@/components/toast';
-import { useSession } from 'next-auth/react';
 
 export default function Page() {
   const router = useRouter();
@@ -24,26 +23,36 @@ export default function Page() {
     },
   );
 
-  const { update: updateSession } = useSession();
-
   useEffect(() => {
+    if (!state) return;
+
     if (state.status === 'user_exists') {
-      toast({ type: 'error', description: 'Account already exists!' });
+      toast({
+        type: 'error',
+        description: state.message || 'Account already exists!',
+      });
     } else if (state.status === 'failed') {
-      toast({ type: 'error', description: 'Failed to create account!' });
+      toast({
+        type: 'error',
+        description: state.message || 'Failed to create account!',
+      });
     } else if (state.status === 'invalid_data') {
       toast({
         type: 'error',
         description: 'Failed validating your submission!',
       });
     } else if (state.status === 'success') {
-      toast({ type: 'success', description: 'Account created successfully!' });
+      toast({
+        type: 'success',
+        description:
+          'Account created successfully! Please check your email to verify your account.',
+      });
 
       setIsSuccessful(true);
-      updateSession();
+      router.push('/login');
       router.refresh();
     }
-  }, [state, router, updateSession]);
+  }, [state?.status, state?.message, router]);
 
   const handleSubmit = (formData: FormData) => {
     setEmail(formData.get('email') as string);

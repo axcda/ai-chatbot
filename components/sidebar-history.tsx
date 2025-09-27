@@ -2,8 +2,7 @@
 
 import { isToday, isYesterday, subMonths, subWeeks } from 'date-fns';
 import { useParams, useRouter } from 'next/navigation';
-import type { User } from 'next-auth';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
@@ -28,6 +27,7 @@ import { getGuestChats, removeGuestChat } from '@/lib/guest-storage';
 import { ChatItem } from './sidebar-history-item';
 import useSWRInfinite from 'swr/infinite';
 import { LoaderIcon } from './icons';
+import type { CookieUser } from '@/lib/auth/types';
 
 type GroupedChats = {
   today: Chat[];
@@ -94,10 +94,15 @@ export function getChatHistoryPaginationKey(
   return `/api/history?ending_before=${firstChatFromPage.id}&limit=${PAGE_SIZE}`;
 }
 
-export function SidebarHistory({ user }: { user: User | undefined }) {
+export function SidebarHistory({
+  user,
+}: {
+  user: CookieUser | null;
+}) {
   const { setOpenMobile } = useSidebar();
   const { id } = useParams();
-  const isGuest = user && (user as any).type === 'guest';
+  // 视为未登录即访客，以启用本地历史
+  const isGuest = !user || user.type !== 'authenticated';
 
   const {
     data: paginatedChatHistories,
@@ -113,13 +118,27 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
 
   const [guestChats, setGuestChats] = useState<Chat[]>([] as any);
   useEffect(() => {
+    console.log(
+      '📋 SidebarHistory: Loading guest chats, isGuest:',
+      isGuest,
+      'user:',
+      user,
+    );
     if (!isGuest) return;
-    setGuestChats(getGuestChats() as any);
+    const chats = getGuestChats() as any;
+    console.log('📋 Guest chats loaded:', chats);
+    setGuestChats(chats);
   }, [isGuest]);
 
   useEffect(() => {
     if (!isGuest) return;
-    const onUpdate = () => setGuestChats(getGuestChats() as any);
+    console.log('📋 Setting up guest storage listener');
+    const onUpdate = () => {
+      console.log('📋 Guest storage updated event fired');
+      const chats = getGuestChats() as any;
+      console.log('📋 Updated guest chats:', chats);
+      setGuestChats(chats);
+    };
     window.addEventListener('guest-storage-updated', onUpdate);
     return () => window.removeEventListener('guest-storage-updated', onUpdate);
   }, [isGuest]);
@@ -131,14 +150,14 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const hasReachedEnd = isGuest
     ? true
     : paginatedChatHistories
-    ? paginatedChatHistories.some((page) => page.hasMore === false)
-    : false;
+      ? paginatedChatHistories.some((page) => page.hasMore === false)
+      : false;
 
   const hasEmptyChatHistory = isGuest
     ? guestChats.length === 0
     : paginatedChatHistories
-    ? paginatedChatHistories.every((page) => page.chats.length === 0)
-    : false;
+      ? paginatedChatHistories.every((page) => page.chats.length === 0)
+      : false;
 
   const handleDelete = async () => {
     if (isGuest) {
@@ -178,17 +197,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     }
   };
 
-  if (!user) {
-    return (
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <div className="flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-            Login to save and revisit previous chats!
-          </div>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    );
-  }
+  // 不再在未登录时提前返回，以便显示访客本地历史
 
   if (!isGuest && isLoading) {
     return (

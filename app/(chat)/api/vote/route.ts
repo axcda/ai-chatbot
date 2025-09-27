@@ -1,4 +1,4 @@
-import { auth } from '@/app/(auth)/auth';
+import { createClient } from '@/lib/supabase/server';
 import { getChatById, getVotesByChatId, voteMessage } from '@/lib/db/queries';
 import { ChatSDKError } from '@/lib/errors';
 
@@ -13,9 +13,29 @@ export async function GET(request: Request) {
     ).toResponse();
   }
 
-  const session = await auth();
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (clientError) {
+    console.warn('Supabase client initialization failed in vote GET.', clientError);
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
 
-  if (!session?.user) {
+  if (!supabase) {
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in vote GET.', error);
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
+
+  if (!user) {
     return new ChatSDKError('unauthorized:vote').toResponse();
   }
 
@@ -25,7 +45,7 @@ export async function GET(request: Request) {
     return new ChatSDKError('not_found:chat').toResponse();
   }
 
-  if (chat.userId !== session.user.id) {
+  if (chat.userId !== user.id) {
     return new ChatSDKError('forbidden:vote').toResponse();
   }
 
@@ -49,9 +69,29 @@ export async function PATCH(request: Request) {
     ).toResponse();
   }
 
-  const session = await auth();
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (clientError) {
+    console.warn('Supabase client initialization failed in vote PATCH.', clientError);
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
 
-  if (!session?.user) {
+  if (!supabase) {
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in vote PATCH.', error);
+    return new ChatSDKError('unauthorized:vote').toResponse();
+  }
+
+  if (!user) {
     return new ChatSDKError('unauthorized:vote').toResponse();
   }
 
@@ -61,7 +101,7 @@ export async function PATCH(request: Request) {
     return new ChatSDKError('not_found:vote').toResponse();
   }
 
-  if (chat.userId !== session.user.id) {
+  if (chat.userId !== user.id) {
     return new ChatSDKError('forbidden:vote').toResponse();
   }
 

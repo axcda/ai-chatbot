@@ -6,7 +6,12 @@ import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
-import { fetcher, fetchWithErrorHandlers, generateUUID, getTextFromMessage } from '@/lib/utils';
+import {
+  fetcher,
+  fetchWithErrorHandlers,
+  generateUUID,
+  getTextFromMessage,
+} from '@/lib/utils';
 import { Artifact } from './artifact';
 import { MultimodalInput } from './multimodal-input';
 import { Messages } from './messages';
@@ -15,7 +20,7 @@ import { useArtifactSelector } from '@/hooks/use-artifact';
 import { unstable_serialize } from 'swr/infinite';
 import { getChatHistoryPaginationKey } from './sidebar-history';
 import { toast } from './toast';
-import type { Session } from 'next-auth';
+import type { CookieUser } from '@/lib/auth/types';
 import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
@@ -39,7 +44,7 @@ export function Chat({
   initialChatModel,
   initialVisibilityType,
   isReadonly,
-  session,
+  user,
   autoResume,
   initialLastContext,
 }: {
@@ -48,7 +53,7 @@ export function Chat({
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  user: CookieUser | null;
   autoResume: boolean;
   initialLastContext?: LanguageModelUsage;
 }) {
@@ -88,19 +93,32 @@ export function Chat({
           id: m.id,
           role: m.role,
           parts: (m.parts || [])
-            .filter((p: any) =>
-              (p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0) ||
-              (p.type === 'file' && p.url && (p.name || (p as any).filename) && p.mediaType)
+            .filter(
+              (p: any) =>
+                (p.type === 'text' &&
+                  typeof p.text === 'string' &&
+                  p.text.trim().length > 0) ||
+                (p.type === 'file' &&
+                  p.url &&
+                  (p.name || (p as any).filename) &&
+                  p.mediaType),
             )
             .map((p: any) =>
               p.type === 'text'
                 ? { type: 'text', text: p.text }
-                : { type: 'file', url: p.url, name: p.name ?? (p as any).filename, mediaType: p.mediaType }
+                : {
+                    type: 'file',
+                    url: p.url,
+                    name: p.name ?? (p as any).filename,
+                    mediaType: p.mediaType,
+                  },
             ),
         });
 
         const last = messages.at(-1) as ChatMessage | undefined;
-        const lastUser = [...messages].reverse().find((m: any) => m.role === 'user') as ChatMessage | undefined;
+        const lastUser = [...messages]
+          .reverse()
+          .find((m: any) => m.role === 'user') as ChatMessage | undefined;
         const computedMessage = (body as any)?.message
           ? sanitize((body as any).message)
           : last && last.role === 'user'
@@ -115,8 +133,8 @@ export function Chat({
             message: computedMessage,
             selectedChatModel: initialChatModel,
             selectedVisibilityType: visibilityType,
-            // For guest sessions, send full prior messages to preserve context server-side
-            ...(session.user.type === 'guest'
+            // For non-authenticated users, send full prior messages to preserve context server-side
+            ...(!user
               ? { previousMessages: messages.slice(0, -1).map(sanitize) }
               : {}),
             ...body,
@@ -168,9 +186,7 @@ export function Chat({
   }, [query, sendMessage, hasAppendedQuery, id]);
 
   const { data: votes } = useSWR<Array<Vote>>(
-    session.user.type !== 'guest' && messages.length >= 2
-      ? `/api/vote?chatId=${id}`
-      : null,
+    user && messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
     fetcher,
   );
 
@@ -184,9 +200,10 @@ export function Chat({
     setMessages,
   });
 
-  // Guest: hydrate messages from local storage and persist on change
+  // Guest/unauthenticated: hydrate messages from local storage and persist on change
   useEffect(() => {
-    if (session.user.type !== 'guest') return;
+    // 在访客模式下（没有用户或用户类型为guest）从本地存储加载消息
+    if (user && user.type === 'authenticated') return;
     try {
       const { getGuestMessages } = require('@/lib/guest-storage');
       const saved = getGuestMessages(id);
@@ -194,31 +211,49 @@ export function Chat({
         setMessages(saved);
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, session.user.type]);
+  }, [id, setMessages, user]);
 
   useEffect(() => {
-    if (session.user.type !== 'guest') return;
+    // 在访客模式下（没有用户或用户类型为guest）保存到本地存储
+    console.log('💾 Save effect triggered:', {
+      user,
+      userType: user?.type,
+      messagesLength: messages.length,
+    });
+    if (user && user.type === 'authenticated') {
+      console.log('❌ Skipping save - authenticated user');
+      return;
+    }
+    console.log('✅ Saving to localStorage as guest');
     try {
-      const { setGuestMessages, upsertGuestChat } = require('@/lib/guest-storage');
+      const {
+        setGuestMessages,
+        upsertGuestChat,
+      } = require('@/lib/guest-storage');
       setGuestMessages(id, messages);
+      console.log('💾 Messages saved to localStorage');
       // Ensure chat summary exists based on first user message
       if (messages.length > 0) {
         const firstUser = messages.find((m) => m.role === 'user');
         const title = firstUser
           ? getTextFromMessage(firstUser).slice(0, 60) || 'New Chat'
           : 'New Chat';
-        upsertGuestChat({
+        const chatData = {
           id,
           createdAt: new Date().toISOString() as any,
           title,
-          userId: session.user.id as any,
+          userId: 'guest' as any,
           visibility: visibilityType,
           lastContext: usage as any,
-        } as any);
+        };
+        console.log('💾 Upserting chat:', chatData);
+        upsertGuestChat(chatData as any);
+        console.log('✅ Chat upserted to localStorage');
       }
-    } catch {}
-  }, [id, messages, session.user.id, session.user.type, usage, visibilityType]);
+    } catch (error) {
+      console.error('❌ Error saving to localStorage:', error);
+    }
+  }, [id, messages, user, usage, visibilityType]);
 
   return (
     <>
@@ -227,7 +262,7 @@ export function Chat({
           chatId={id}
           selectedVisibilityType={initialVisibilityType}
           isReadonly={isReadonly}
-          session={session}
+          user={user}
         />
 
         <Messages

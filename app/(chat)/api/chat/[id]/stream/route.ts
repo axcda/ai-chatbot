@@ -1,4 +1,4 @@
-import { auth } from '@/app/(auth)/auth';
+import { createClient } from '@/lib/supabase/server';
 import {
   getChatById,
   getMessagesByChatId,
@@ -28,9 +28,32 @@ export async function GET(
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
-  const session = await auth();
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+  try {
+    supabase = await createClient();
+  } catch (clientError) {
+    console.warn(
+      'Supabase client initialization failed in stream resume API.',
+      clientError,
+    );
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
 
-  if (!session?.user) {
+  if (!supabase) {
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.warn('Supabase getUser failed in stream resume API.', error);
+    return new ChatSDKError('unauthorized:chat').toResponse();
+  }
+
+  if (!user) {
     return new ChatSDKError('unauthorized:chat').toResponse();
   }
 
@@ -46,7 +69,7 @@ export async function GET(
     return new ChatSDKError('not_found:chat').toResponse();
   }
 
-  if (chat.visibility === 'private' && chat.userId !== session.user.id) {
+  if (chat.visibility === 'private' && chat.userId !== user.id) {
     return new ChatSDKError('forbidden:chat').toResponse();
   }
 

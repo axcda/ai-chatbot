@@ -1,27 +1,25 @@
 'use client';
-
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useWindowSize } from 'usehooks-ts';
 
 import { SidebarToggle } from '@/components/sidebar-toggle';
 import { Button } from '@/components/ui/button';
-import { PlusIcon, VercelIcon } from './icons';
+import { PlusIcon, } from './icons';
 import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
-import type { Session } from 'next-auth';
+import type { User } from '@supabase/supabase-js';
 
 function PureChatHeader({
   chatId,
   selectedVisibilityType,
   isReadonly,
-  session,
+  user,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  user: User | null;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
@@ -46,7 +44,7 @@ function PureChatHeader({
         </Button>
       )}
 
-      {!isReadonly && session.user.type !== 'guest' && (
+      {!isReadonly && user && (
         <VisibilitySelector
           chatId={chatId}
           selectedVisibilityType={selectedVisibilityType}

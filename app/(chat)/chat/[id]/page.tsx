@@ -1,43 +1,19 @@
 import { cookies } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
-import { auth } from '@/app/(auth)/auth';
 import { Chat } from '@/components/chat';
 import { getChatById, getMessagesByChatId } from '@/lib/db/queries';
 import { DataStreamHandler } from '@/components/data-stream-handler';
 import { DEFAULT_CHAT_MODEL } from '@/lib/ai/models';
 import { convertToUIMessages } from '@/lib/utils';
+import type { CookieUser } from '@/lib/auth/types';
 
 export default async function Page(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id } = params;
-  const session = await auth();
-
-  if (!session) {
-    redirect('/api/auth/guest');
-  }
-
-  // Guest: skip database lookups and render with client-side persistence
-  if (session.user?.type === 'guest') {
-    const cookieStore = await cookies();
-    const chatModelFromCookie = cookieStore.get('chat-model');
-
-    return (
-      <>
-        <Chat
-          id={id}
-          initialMessages={[]}
-          initialChatModel={chatModelFromCookie?.value || DEFAULT_CHAT_MODEL}
-          initialVisibilityType={'private'}
-          isReadonly={false}
-          session={session}
-          autoResume={true}
-          initialLastContext={undefined}
-        />
-        <DataStreamHandler />
-      </>
-    );
-  }
+  const cookieStore = await cookies();
+  const userCookie = cookieStore.get('chat:user');
+  const user = userCookie ? (JSON.parse(userCookie.value) as CookieUser) : null;
 
   const chat = await getChatById({ id });
 
@@ -46,11 +22,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   }
 
   if (chat.visibility === 'private') {
-    if (!session.user) {
+    if (!user) {
       return notFound();
     }
 
-    if (session.user.id !== chat.userId) {
+    if (chat.userId && user.id !== chat.userId) {
       return notFound();
     }
   }
@@ -60,8 +36,6 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   });
 
   const uiMessages = convertToUIMessages(messagesFromDb);
-
-  const cookieStore = await cookies();
   const chatModelFromCookie = cookieStore.get('chat-model');
 
   if (!chatModelFromCookie) {
@@ -72,8 +46,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
           initialMessages={uiMessages}
           initialChatModel={DEFAULT_CHAT_MODEL}
           initialVisibilityType={chat.visibility}
-          isReadonly={session?.user?.id !== chat.userId}
-          session={session}
+          isReadonly={user?.id !== chat.userId}
+          user={user}
           autoResume={true}
           initialLastContext={chat.lastContext ?? undefined}
         />
@@ -89,8 +63,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         initialMessages={uiMessages}
         initialChatModel={chatModelFromCookie.value}
         initialVisibilityType={chat.visibility}
-        isReadonly={session?.user?.id !== chat.userId}
-        session={session}
+        isReadonly={user?.id !== chat.userId}
+        user={user}
         autoResume={true}
         initialLastContext={chat.lastContext ?? undefined}
       />

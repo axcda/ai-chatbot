@@ -1,11 +1,11 @@
 'use client';
 
-import type { User } from 'next-auth';
 import { useRouter } from 'next/navigation';
 
 import { PlusIcon } from '@/components/icons';
 import { SidebarHistory } from '@/components/sidebar-history';
 import { SidebarUserNav } from '@/components/sidebar-user-nav';
+import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -17,10 +17,16 @@ import {
 } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import type { CookieUser } from '@/lib/auth/types';
 
-export function AppSidebar({ user }: { user: User | undefined }) {
+interface AppSidebarProps {
+  user: CookieUser | null;
+}
+
+export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
+  const auth = useAuth();
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">
@@ -61,9 +67,15 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarHistory user={user} />
+        <SidebarHistory user={user ?? auth.user} />
       </SidebarContent>
-      <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
+      <SidebarFooter>
+        <SidebarUserNav
+          user={user ?? auth.user}
+          loading={auth.loading}
+          signOut={auth.signOut}
+        />
+      </SidebarFooter>
     </Sidebar>
   );
 }
