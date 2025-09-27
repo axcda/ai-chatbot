@@ -19,6 +19,7 @@ import {
   user,
   type User,
   chat,
+  type Chat,
   document,
   type Suggestion,
   suggestion,
