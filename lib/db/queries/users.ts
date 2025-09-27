@@ -6,7 +6,16 @@
 import { db } from '../index';
 import { user, type User } from '../schema';
 import { eq, and, or } from 'drizzle-orm';
-import type { CreateUser, UpdateUser } from '../validations';
+type CreateUser = {
+  firebaseUid?: string;
+  displayName?: string;
+  avatarUrl?: string;
+};
+
+type UpdateUser = {
+  displayName?: string | null;
+  avatarUrl?: string | null;
+};
 
 /**
  * 根据邮箱获取用户
