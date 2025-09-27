@@ -59,27 +59,27 @@ export const CheckIcon = createStableIcon([
 export const ArrowDownIcon = (Lucide as any).ArrowDownIcon ?? Lucide.ArrowDown;
 export const ArrowLeftIcon = (Lucide as any).ArrowLeftIcon ?? Lucide.ArrowLeft;
 export const ArrowRightIcon = (Lucide as any).ArrowRightIcon ?? Lucide.ArrowRight;
-export const BookIcon = (Lucide as any).BookIcon ?? Lucide.Book;
-export const BrainIcon = (Lucide as any).BrainIcon ?? Lucide.Brain;
+export const BookIcon = (Lucide as any).BookIcon ?? (Lucide as any).Book;
+export const BrainIcon = (Lucide as any).BrainIcon ?? (Lucide as any).Brain;
 export const CheckCircleIcon =
-  (Lucide as any).CheckCircleIcon ?? Lucide.CheckCircle;
+  (Lucide as any).CheckCircleIcon ?? (Lucide as any).CheckCircle;
 export const ChevronDownIcon =
-  (Lucide as any).ChevronDownIcon ?? Lucide.ChevronDown;
+  (Lucide as any).ChevronDownIcon ?? (Lucide as any).ChevronDown;
 export const ChevronLeftIcon =
-  (Lucide as any).ChevronLeftIcon ?? Lucide.ChevronLeft;
+  (Lucide as any).ChevronLeftIcon ?? (Lucide as any).ChevronLeft;
 export const ChevronRightIcon =
-  (Lucide as any).ChevronRightIcon ?? Lucide.ChevronRight;
+  (Lucide as any).ChevronRightIcon ?? (Lucide as any).ChevronRight;
 export const ChevronUpIcon =
-  (Lucide as any).ChevronUpIcon ?? Lucide.ChevronUp;
-export const CircleIcon = (Lucide as any).CircleIcon ?? Lucide.Circle;
-export const ClockIcon = (Lucide as any).ClockIcon ?? Lucide.Clock;
-export const Loader2Icon = (Lucide as any).Loader2Icon ?? Lucide.Loader2;
-export const SearchIcon = (Lucide as any).SearchIcon ?? Lucide.Search;
-export const SendIcon = (Lucide as any).SendIcon ?? Lucide.Send;
-export const SquareIcon = (Lucide as any).SquareIcon ?? Lucide.Square;
-export const WrenchIcon = (Lucide as any).WrenchIcon ?? Lucide.Wrench;
-export const XCircleIcon = (Lucide as any).XCircleIcon ?? Lucide.XCircle;
-export const XIcon = (Lucide as any).XIcon ?? Lucide.X;
+  (Lucide as any).ChevronUpIcon ?? (Lucide as any).ChevronUp;
+export const CircleIcon = (Lucide as any).CircleIcon ?? (Lucide as any).Circle;
+export const ClockIcon = (Lucide as any).ClockIcon ?? (Lucide as any).Clock;
+export const Loader2Icon = (Lucide as any).Loader2Icon ?? (Lucide as any).Loader2;
+export const SearchIcon = (Lucide as any).SearchIcon ?? (Lucide as any).Search;
+export const SendIcon = (Lucide as any).SendIcon ?? (Lucide as any).Send;
+export const SquareIcon = (Lucide as any).SquareIcon ?? (Lucide as any).Square;
+export const WrenchIcon = (Lucide as any).WrenchIcon ?? (Lucide as any).Wrench;
+export const XCircleIcon = (Lucide as any).XCircleIcon ?? (Lucide as any).XCircle;
+export const XIcon = (Lucide as any).XIcon ?? (Lucide as any).X;
 
 export const ArrowDown = Lucide.ArrowDown;
 export const ArrowLeft = Lucide.ArrowLeft;
