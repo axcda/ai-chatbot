@@ -15,21 +15,22 @@ import { cn } from '@/lib/utils';
 
 import { CheckCircleFillIcon, ChevronDownIcon } from './icons';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
-import type { Session } from 'next-auth';
+import type { Session } from '@supabase/supabase-js';
+import { getUserType } from '@/lib/auth/types';
 
 export function ModelSelector({
   session,
   selectedModelId,
   className,
 }: {
-  session: Session;
+  session: Session | null;
   selectedModelId: string;
 } & React.ComponentProps<typeof Button>) {
   const [open, setOpen] = useState(false);
   const [optimisticModelId, setOptimisticModelId] =
     useOptimistic(selectedModelId);
 
-  const userType = session.user.type;
+  const userType = getUserType(session?.user ?? null);
   const { availableChatModelIds } = entitlementsByUserType[userType];
 
   const [dynamicModels, setDynamicModels] = useState<typeof staticChatModels | null>(null);
