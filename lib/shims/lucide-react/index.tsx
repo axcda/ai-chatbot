@@ -2,11 +2,18 @@ import { forwardRef } from 'react';
 import type { SVGProps } from 'react';
 import * as Lucide from 'lucide-react/dist/esm/lucide-react';
 
+type StableIconProps = SVGProps<SVGSVGElement> & {
+  size?: number;
+};
+
 const createStableIcon = (paths: Array<{ d: string; type?: 'path' | 'polyline' }>) =>
-  forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(function StableIcon(
-    { strokeWidth = 2, ...props },
+  forwardRef<SVGSVGElement, StableIconProps>(function StableIcon(
+    { strokeWidth = 2, size, width, height, ...props },
     ref,
   ) {
+    const resolvedWidth = width ?? size ?? 24;
+    const resolvedHeight = height ?? size ?? 24;
+
     return (
       <svg
         ref={ref}
@@ -18,6 +25,8 @@ const createStableIcon = (paths: Array<{ d: string; type?: 'path' | 'polyline' }
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
+        width={resolvedWidth}
+        height={resolvedHeight}
         {...props}
       >
         {paths.map((item) =>
